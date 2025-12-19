@@ -1,0 +1,8 @@
+{
+  "name": "Persian Warehouse Management System",
+  "description": "A comprehensive warehouse management application with role-based access control, invoice management, and AI-powered product image generation.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone"
+  ]
+}
