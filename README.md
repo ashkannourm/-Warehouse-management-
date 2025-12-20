@@ -4,18 +4,18 @@
 
 راهنمای نصب که قبلاً برات نوشتم را این‌جا دوباره، به‌صورت یک فایل Markdown قابل‌کپی می‌گذارم تا مستقیماً در گیت‌هاب استفاده کنی.[^1][^2]
 
-```Bash
+
 # Warehouse App – Server Installation Guide
 
 این راهنما نحوه استقرار برنامه مدیریت انبار روی سرور Ubuntu با Nginx و Firebase را توضیح می‌دهد. در مثال‌ها، `YOUR_IP` و `YOUR_DOMAIN` را با اطلاعات واقعی سرور خود جایگزین کنید.
 
----
+
 
 ## 1. آماده‌سازی سرور
 
 ### 1.1 ایجاد فولدر پروژه
 
-```
+```Bash
 
 sudo mkdir -p /var/www/warehouse-app
 cd /var/www/warehouse-app
@@ -150,7 +150,7 @@ const analytics = getAnalytics(app);
 
 یا نسخه کمی محدودتر: [web:135]
 
-```
+```Bash
 
 {
   "rules": {
