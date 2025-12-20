@@ -1,6 +1,6 @@
-<img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
 
-# فایلهای نحوه نصب را مجدد نمایش بده
+
+# راهنمای نصب برنامه بر روی سرور Ubuntu
 
 راهنمای نصب که قبلاً برات نوشتم را این‌جا دوباره، به‌صورت یک فایل Markdown قابل‌کپی می‌گذارم تا مستقیماً در گیت‌هاب استفاده کنی.[^1][^2]
 
