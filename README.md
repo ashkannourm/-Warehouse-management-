@@ -34,26 +34,20 @@ npm install
 npm run build
 ```
 
-فایل zip پروژه را به این مسیر منتقل کنید (مثلاً با `scp`) و سپس:
-
-```
-
-apt install -y unzip
-unzip your-project.zip   \# نام واقعی فایل را بگذارید
-
-```
-
----
 
 ## 2. نصب Node.js و ساختن پروژه
 
 ```
-
 apt install -y npm nodejs
+```
+```
 cd /var/www/warehouse-app
+```
+```
 npm install
+```
+```
 npm run build
-
 ```
 
 بعد از `npm run build` خروجی نهایی در پوشه `dist` قرار می‌گیرد.
