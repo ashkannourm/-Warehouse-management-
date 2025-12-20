@@ -16,7 +16,7 @@
 
 ```Bash
 
-sudo mkdir -p /var/www/warehouse-app
+sudo mkdir -p /var/www
 cd /var/www
 git clone https://github.com/ashkannourm/-Warehouse-management-.git warehouse-app
 
