@@ -17,7 +17,13 @@
 ```Bash
 
 sudo mkdir -p /var/www/warehouse-app
+cd /var/www
+git clone https://github.com/ashkannourm/-Warehouse-management-.git warehouse-app
+
 cd /var/www/warehouse-app
+npm install
+npm run build
+
 
 ```
 
