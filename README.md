@@ -17,14 +17,21 @@
 ```Bash
 
 sudo mkdir -p /var/www
+```
+```
 cd /var/www
+```
+```
 git clone https://github.com/ashkannourm/-Warehouse-management-.git warehouse-app
-
+```
+```
 cd /var/www/warehouse-app
+```
+```
 npm install
+```
+```
 npm run build
-
-
 ```
 
 فایل zip پروژه را به این مسیر منتقل کنید (مثلاً با `scp`) و سپس:
