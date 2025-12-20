@@ -31,23 +31,23 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ users, setUsers, appConfig,
     }
   };
 
-  const handleTestTelegram = async () => {
-    const { botToken, chatId } = appConfig?.telegram || { botToken: '', chatId: '' };
-    if (!botToken || !chatId) return alert('ابتدا توکن ربات و Chat ID را وارد کنید.');
+  const handleTestTelegram = async (id: string) => {
+    const { botToken } = appConfig?.telegram || { botToken: '' };
+    if (!botToken || !id) return alert('ابتدا توکن ربات و شناسه مربوطه را وارد کنید.');
 
     try {
       const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          chat_id: chatId,
-          text: '✅ تست اتصال سامانه انبارداری با موفقیت انجام شد!\n\nاین ربات اکنون آماده ارسال گزارشات است.'
+          chat_id: id,
+          text: '✅ تست اتصال سامانه انبارداری با موفقیت انجام شد!'
         })
       });
       
       const result = await response.json();
       if (result.ok) {
-        alert('✅ اتصال برقرار است! پیام تست به تلگرام شما ارسال شد.');
+        alert('✅ پیام تست با موفقیت ارسال شد.');
       } else {
         alert(`❌ خطا از طرف تلگرام: ${result.description}`);
       }
@@ -56,34 +56,25 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ users, setUsers, appConfig,
     }
   };
 
-  // Safe update logic to prevent crashes
   const updateConfig = (updates: Partial<AppConfig>) => {
-    setAppConfig(prev => {
-      const current = prev || { uploadUrl: '', telegram: { botToken: '', chatId: '', enabled: false } };
-      return { ...current, ...updates };
-    });
+    setAppConfig(prev => ({ ...prev, ...updates }));
   };
 
   const updateTelegram = (updates: Partial<typeof appConfig.telegram>) => {
-    setAppConfig(prev => {
-      const current = prev || { uploadUrl: '', telegram: { botToken: '', chatId: '', enabled: false } };
-      const currentTelegram = current.telegram || { botToken: '', chatId: '', enabled: false };
-      return {
-        ...current,
-        telegram: { ...currentTelegram, ...updates }
-      };
-    });
+    setAppConfig(prev => ({
+      ...prev,
+      telegram: { ...prev.telegram, ...updates }
+    }));
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-12 text-right animate-fadeIn" dir="rtl">
-      {/* Ubuntu Image Server Settings */}
       <section className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border dark:border-slate-800">
         <h3 className="text-xl font-bold mb-6 flex items-center gap-3 dark:text-white">
           <span className="bg-orange-100 text-orange-600 p-2 rounded-xl text-xl">🖥️</span>
           تنظیمات سرور تصاویر (اوبونتو)
         </h3>
-        <p className="text-sm text-gray-500 mb-6 leading-relaxed">آدرس فایل API آپلود که روی سرور Ubuntu خود نوشته‌اید را اینجا وارد کنید. این آدرس برای ذخیره فیزیکی تصاویر کالاها استفاده می‌شود.</p>
+        <p className="text-sm text-gray-500 mb-6 leading-relaxed">آدرس فایل API آپلود که روی سرور Ubuntu خود نوشته‌اید را اینجا وارد کنید.</p>
         <div className="flex gap-3">
           <input 
             type="text" 
@@ -92,92 +83,75 @@ const SettingsPage: React.FC<SettingsPageProps> = ({ users, setUsers, appConfig,
             value={appConfig?.uploadUrl || ''}
             onChange={e => updateConfig({ uploadUrl: e.target.value })}
           />
-          <button onClick={handleTestUbuntu} className="bg-orange-500 text-white px-6 py-4 rounded-2xl font-bold hover:bg-orange-600 transition shadow-lg">تست اتصال</button>
+          <button onClick={handleTestUbuntu} className="bg-orange-500 text-white px-6 py-4 rounded-2xl font-bold hover:bg-orange-600 transition shadow-lg text-sm">تست اتصال</button>
         </div>
       </section>
 
-      {/* Telegram Notification Settings */}
       <section className="bg-white dark:bg-slate-900 p-8 rounded-[2rem] shadow-sm border dark:border-slate-800 space-y-8">
         <div>
           <h3 className="text-xl font-bold mb-6 flex items-center gap-3 dark:text-white">
             <span className="bg-blue-100 text-blue-600 p-2 rounded-xl text-xl">✈️</span>
-            گزارشات تلگرام
+            گزارشات تلگرام (مدیر و انباردار)
           </h3>
           
-          {/* Detailed Tutorial Section */}
-          <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-100 dark:border-blue-800/50 p-6 rounded-2xl mb-8 space-y-4 shadow-sm">
-            <h4 className="font-bold text-blue-900 dark:text-blue-200 flex items-center gap-2 text-base">
-              <span>📚</span> راهنمای گام‌به‌گام اتصال به تلگرام:
-            </h4>
-            <div className="text-xs lg:text-sm text-blue-800 dark:text-blue-300 leading-loose space-y-3">
-              <p>برای دریافت گزارش‌های خودکار انبار در تلگرام، این مراحل ساده را انجام دهید:</p>
-              <ol className="list-decimal pr-5 space-y-3 font-medium">
-                <li>
-                  <strong>ساخت ربات:</strong> در تلگرام به آیدی <a href="https://t.me/BotFather" target="_blank" className="underline font-bold text-blue-600">@BotFather</a> پیام دهید، دستور <code>/newbot</code> را بزنید و یک نام برای ربات خود انتخاب کنید.
-                </li>
-                <li>
-                  <strong>دریافت Token:</strong> در انتهای مراحل، یک کد طولانی (مثلاً <code>123456:ABC...</code>) به شما می‌دهد. این همان <span className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded font-bold">Bot Token</span> است. آن را کپی کرده و در کادر پایین وارد کنید.
-                </li>
-                <li>
-                  <strong>دریافت Chat ID:</strong> به ربات <a href="https://t.me/userinfobot" target="_blank" className="underline font-bold text-blue-600">@userinfobot</a> پیام دهید. عددی که به شما نمایش می‌دهد (مثلاً <code>987654321</code>) آیدی عددی شماست. آن را در کادر <span className="bg-blue-100 dark:bg-blue-900/50 px-1 rounded font-bold">Chat ID</span> وارد کنید.
-                </li>
-                <li>
-                  <strong>فعال‌سازی و تست:</strong> پس از وارد کردن مقادیر، دکمه "تست اتصال" را بزنید. اگر پیام در تلگرام شما دریافت شد، تیک "فعال‌سازی" را بزنید.
-                </li>
-              </ol>
-            </div>
-          </div>
-
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-2">
+            <div className="md:col-span-2 space-y-2">
               <label className="text-xs font-bold text-gray-500 dark:text-gray-400 pr-2">Bot Token (از BotFather)</label>
               <input 
                 type="text" 
-                placeholder="مثلاً: 12345678:AAH-xXyYzZ..."
-                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-xs lg:text-sm"
+                placeholder="12345678:AAH-xXyYzZ..."
+                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
                 value={appConfig?.telegram?.botToken || ''}
                 onChange={e => updateTelegram({ botToken: e.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 pr-2">Chat ID (آیدی عددی شما)</label>
-              <input 
-                type="text" 
-                placeholder="مثلاً: 987654321"
-                className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
-                value={appConfig?.telegram?.chatId || ''}
-                onChange={e => updateTelegram({ chatId: e.target.value })}
-              />
-            </div>
             
-            <div className="md:col-span-2 flex flex-col sm:flex-row gap-4">
-               <button 
-                  type="button" 
-                  onClick={handleTestTelegram} 
-                  className="flex-1 bg-blue-500 text-white py-4 rounded-2xl font-bold hover:bg-blue-600 transition shadow-lg flex items-center justify-center gap-2"
-                >
-                  📡 تست اتصال تلگرام
-                </button>
-               <div className="flex-[2] flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border dark:border-slate-700">
-                  <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full shadow-inner bg-gray-300 dark:bg-slate-700">
-                    <input 
-                      type="checkbox" 
-                      id="tg-en" 
-                      className="absolute z-10 w-6 h-6 opacity-0 cursor-pointer peer"
-                      checked={!!appConfig?.telegram?.enabled} 
-                      onChange={e => updateTelegram({ enabled: e.target.checked })}
-                    />
-                    <div className={`absolute left-0 w-6 h-6 transition-all duration-200 bg-white rounded-full shadow-md peer-checked:left-6 ${appConfig?.telegram?.enabled ? 'bg-blue-600' : 'bg-white'}`}></div>
-                    <div className={`w-12 h-6 rounded-full transition-colors duration-200 ${appConfig?.telegram?.enabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-slate-700'}`}></div>
-                  </div>
-                  <label htmlFor="tg-en" className="font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">ارسال خودکار گزارش حواله‌ها به تلگرام</label>
+            <div className="space-y-4">
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 pr-2">شناسه چت مدیر (Admin Chat ID)</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="مثلاً: 987654321"
+                  className="flex-1 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  value={appConfig?.telegram?.adminChatId || ''}
+                  onChange={e => updateTelegram({ adminChatId: e.target.value })}
+                />
+                <button onClick={() => handleTestTelegram(appConfig.telegram.adminChatId)} className="bg-blue-100 text-blue-600 px-4 rounded-xl text-xs font-bold">تست</button>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <label className="text-xs font-bold text-gray-500 dark:text-gray-400 pr-2">شناسه چت انباردار (Stockman Chat ID)</label>
+              <div className="flex gap-2">
+                <input 
+                  type="text" 
+                  placeholder="مثلاً: 11223344"
+                  className="flex-1 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border dark:border-slate-700 outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  value={appConfig?.telegram?.stockmanChatId || ''}
+                  onChange={e => updateTelegram({ stockmanChatId: e.target.value })}
+                />
+                <button onClick={() => handleTestTelegram(appConfig.telegram.stockmanChatId)} className="bg-blue-100 text-blue-600 px-4 rounded-xl text-xs font-bold">تست</button>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 flex items-center gap-4 bg-slate-50 dark:bg-slate-800/50 p-5 rounded-2xl border dark:border-slate-700">
+               <div className="relative inline-block w-12 h-6 transition duration-200 ease-in-out rounded-full shadow-inner bg-gray-300 dark:bg-slate-700">
+                 <input 
+                   type="checkbox" 
+                   id="tg-en" 
+                   className="absolute z-10 w-6 h-6 opacity-0 cursor-pointer peer"
+                   checked={!!appConfig?.telegram?.enabled} 
+                   onChange={e => updateTelegram({ enabled: e.target.checked })}
+                 />
+                 <div className={`absolute left-0 w-6 h-6 transition-all duration-200 bg-white rounded-full shadow-md peer-checked:left-6 ${appConfig?.telegram?.enabled ? 'bg-blue-600' : 'bg-white'}`}></div>
+                 <div className={`w-12 h-6 rounded-full transition-colors duration-200 ${appConfig?.telegram?.enabled ? 'bg-blue-500' : 'bg-gray-300 dark:bg-slate-700'}`}></div>
                </div>
+               <label htmlFor="tg-en" className="font-bold text-gray-700 dark:text-gray-300 cursor-pointer select-none">ارسال خودکار گزارش‌ها به تلگرام (هوشمند)</label>
             </div>
           </div>
         </div>
       </section>
 
-      {/* User Management */}
       <section>
         <div className="flex justify-between items-center mb-6 px-2">
           <h3 className="text-xl font-bold dark:text-white flex items-center gap-3">

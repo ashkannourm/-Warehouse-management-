@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { initializeApp } from 'firebase/app';
-import { getDatabase, ref, onValue, set } from 'firebase/database';
+import { getDatabase, ref, onValue, set, push, remove, get } from 'firebase/database';
 import { firebaseConfig } from './firebaseConfig';
-import { User, UserRole, Product, Customer, Invoice, Category, AppConfig } from './types';
+import { User, UserRole, Product, Customer, Invoice, Category, AppConfig, ChatMessage } from './types';
 import { INITIAL_USERS, INITIAL_CATEGORIES } from './constants';
 import LoginPage from './components/LoginPage';
 import Sidebar from './components/Sidebar';
@@ -14,6 +14,7 @@ import Dashboard from './components/Dashboard';
 import CategoriesPage from './components/CategoriesPage';
 import SettingsPage from './components/SettingsPage';
 import BackupPage from './components/BackupPage';
+import FloatingChatBox from './components/FloatingChatBox';
 
 const app = initializeApp(firebaseConfig);
 const db = getDatabase(app);
@@ -24,16 +25,42 @@ const App: React.FC = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
+  const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => Number(localStorage.getItem('lastReadChat')) || 0);
   
   const [users, setUsers] = useState<User[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [appConfig, setAppConfig] = useState<AppConfig>({
     uploadUrl: '',
-    telegram: { botToken: '', chatId: '', enabled: false }
+    telegram: { botToken: '', adminChatId: '', stockmanChatId: '', enabled: false }
   });
+
+  // Auto-cleanup old messages (older than 10 days)
+  useEffect(() => {
+    if (currentUser?.role === UserRole.ADMIN) {
+      const cleanupOldMessages = async () => {
+        const TEN_DAYS_MS = 10 * 24 * 60 * 60 * 1000;
+        const now = Date.now();
+        const threshold = now - TEN_DAYS_MS;
+        
+        const messagesRef = ref(db, 'messages');
+        const snapshot = await get(messagesRef);
+        const data = snapshot.val();
+        
+        if (data) {
+          Object.keys(data).forEach((key) => {
+            if (data[key].timestamp < threshold) {
+              remove(ref(db, `messages/${key}`));
+            }
+          });
+        }
+      };
+      cleanupOldMessages();
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     const syncRefs = [
@@ -42,6 +69,7 @@ const App: React.FC = () => {
       { path: 'products', setter: setProducts },
       { path: 'customers', setter: setCustomers },
       { path: 'invoices', setter: setInvoices },
+      { path: 'messages', setter: setMessages },
       {
         path: 'config',
         setter: (val: any) => {
@@ -49,7 +77,8 @@ const App: React.FC = () => {
             uploadUrl: val?.uploadUrl || '',
             telegram: {
               botToken: val?.telegram?.botToken || '',
-              chatId: val?.telegram?.chatId || '',
+              adminChatId: val?.telegram?.adminChatId || '',
+              stockmanChatId: val?.telegram?.stockmanChatId || '',
               enabled: !!val?.telegram?.enabled,
             },
           };
@@ -64,7 +93,6 @@ const App: React.FC = () => {
         const val = snapshot.val();
         if (val) {
           const dataArray = typeof val === 'object' && !Array.isArray(val) ? Object.values(val) : val;
-          // Specialized handling for config as it is an object with a predefined setter logic
           if (path === 'config') {
             setter(val);
           } else {
@@ -73,9 +101,8 @@ const App: React.FC = () => {
         } else if (initial) {
           set(ref(db, path), initial);
         } else {
-          // Fallback if no data exists
           if (path === 'config') {
-            setter({ uploadUrl: '', telegram: { botToken: '', chatId: '', enabled: false } } as any);
+            setter({ uploadUrl: '', telegram: { botToken: '', adminChatId: '', stockmanChatId: '', enabled: false } } as any);
           } else {
             setter([] as any);
           }
@@ -112,7 +139,7 @@ const App: React.FC = () => {
     const updateDb = (path: string, data: any) => set(ref(db, path), data);
 
     switch (activeTab) {
-      case 'dashboard': return <Dashboard invoices={invoices} products={products} />;
+      case 'dashboard': return <Dashboard invoices={invoices} products={products} currentUser={currentUser} />;
       case 'inventory': 
         return <InventoryPage 
           products={products} 
@@ -183,7 +210,7 @@ const App: React.FC = () => {
             if (newData.invoices) updateDb('invoices', newData.invoices);
           }} 
         />;
-      default: return <Dashboard invoices={invoices} products={products} />;
+      default: return <Dashboard invoices={invoices} products={products} currentUser={currentUser} />;
     }
   };
 
@@ -210,6 +237,34 @@ const App: React.FC = () => {
         </header>
         {renderContent()}
       </main>
+
+      <FloatingChatBox 
+        messages={messages}
+        currentUser={currentUser}
+        lastReadTimestamp={lastReadTimestamp}
+        onOpen={() => {
+          const now = Date.now();
+          setLastReadTimestamp(now);
+          localStorage.setItem('lastReadChat', String(now));
+        }}
+        onSendMessage={(text) => {
+          const msgRef = ref(db, 'messages');
+          const newMsg = push(msgRef);
+          set(newMsg, {
+            id: newMsg.key,
+            senderId: currentUser.id,
+            senderName: currentUser.name,
+            text,
+            timestamp: Date.now()
+          });
+          setLastReadTimestamp(Date.now());
+          localStorage.setItem('lastReadChat', String(Date.now()));
+        }}
+        onClearHistory={() => {
+          const msgRef = ref(db, 'messages');
+          remove(msgRef);
+        }}
+      />
     </div>
   );
 };

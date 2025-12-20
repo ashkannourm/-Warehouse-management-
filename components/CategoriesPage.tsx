@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Category, UserRole } from '../types';
 
 interface CategoriesPageProps {
@@ -12,6 +12,10 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ categories, setCategori
   const [newCat, setNewCat] = useState('');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
+
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+  }, [categories]);
 
   const add = () => {
     if (!newCat.trim()) return;
@@ -52,7 +56,7 @@ const CategoriesPage: React.FC<CategoriesPageProps> = ({ categories, setCategori
         </div>
 
         <div className="grid grid-cols-1 gap-3">
-          {categories.map(c => (
+          {sortedCategories.map(c => (
             <div key={c.id} className="flex justify-between items-center p-4 bg-gray-50 dark:bg-slate-800/50 rounded-2xl border dark:border-slate-700 group hover:border-blue-200 dark:hover:border-blue-900 transition-all">
               {editingId === c.id ? (
                 <div className="flex-1 flex gap-2">

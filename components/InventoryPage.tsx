@@ -16,6 +16,11 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
   const [uploading, setUploading] = useState(false);
   const [form, setForm] = useState({ name: '', category: '', stock: 0, unit: 'عدد', image: '' });
 
+  // Alphabetical sort for categories
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+  }, [categories]);
+
   const nextId = useMemo(() => {
     const ids = products.map(p => parseInt(p.id)).filter(id => !isNaN(id));
     return (ids.length > 0 ? Math.max(...ids) + 1 : 1001).toString();
@@ -26,7 +31,6 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
     if (!file) return;
 
     if (uploadUrl) {
-      // Logic for Ubuntu Server Upload
       setUploading(true);
       const formData = new FormData();
       formData.append('image', file);
@@ -49,7 +53,6 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
         setUploading(false);
       }
     } else {
-      // Fallback to Base64
       const reader = new FileReader();
       reader.onloadend = () => setForm(prev => ({ ...prev, image: reader.result as string }));
       reader.readAsDataURL(file);
@@ -68,8 +71,14 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
 
   const groupedProducts = useMemo(() => {
     const groups: Record<string, Product[]> = {};
-    categories.forEach(cat => groups[cat.name] = products.filter(p => p.category === cat.name));
-    const others = products.filter(p => !categories.some(cat => cat.name === p.category));
+    // Sort categories alphabetically before grouping
+    const cats = [...categories].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+    
+    cats.forEach(cat => {
+      groups[cat.name] = products.filter(p => p.category === cat.name).sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+    });
+    
+    const others = products.filter(p => !categories.some(cat => cat.name === p.category)).sort((a, b) => a.name.localeCompare(b.name, 'fa'));
     if (others.length > 0) groups['سایر موارد'] = others;
     return groups;
   }, [products, categories]);
@@ -84,7 +93,6 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
       </div>
 
       <div className="space-y-12">
-        {/* Fix: Explicitly cast Object.entries to ensure 'items' is treated as Product[] instead of unknown to resolve TS errors on lines 88 and 102 */}
         {(Object.entries(groupedProducts) as [string, Product[]][]).map(([catName, items]) => (
           items.length > 0 && (
             <div key={catName} className="space-y-4">
@@ -100,7 +108,6 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
                     </tr>
                   </thead>
                   <tbody>
-                    {/* Fix: items is correctly identified as Product[] here because of the entry cast above */}
                     {items.map(p => (
                       <tr key={p.id} className="border-t dark:border-slate-800 hover:bg-gray-50 dark:hover:bg-slate-800/50 transition">
                         <td className="p-4">
@@ -110,7 +117,6 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
                         <td className="p-4 font-bold text-blue-600 dark:text-blue-400">{p.stock} {p.unit}</td>
                         <td className="p-4">
                           {userRole === UserRole.ADMIN && (
-                            // Fix: Explicitly map the product properties to the form state to avoid spreading 'id' and handle the optional 'image' property.
                             <button onClick={() => { setEditingProduct(p); setForm({ name: p.name, category: p.category, stock: p.stock, unit: p.unit, image: p.image || '' }); setShowModal(true); }} className="text-xs bg-slate-100 dark:bg-slate-800 p-2 rounded-lg font-bold dark:text-gray-300">ویرایش</button>
                           )}
                         </td>
@@ -132,7 +138,7 @@ const InventoryPage: React.FC<InventoryPageProps> = ({ products, setProducts, ca
               <input type="text" placeholder="نام کالا" className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border-none outline-none focus:ring-2 focus:ring-blue-500" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required />
               <select className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border-none outline-none" value={form.category} onChange={e => setForm({...form, category: e.target.value})} required>
                 <option value="">دسته کالا...</option>
-                {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                {sortedCategories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
               </select>
               <div className="grid grid-cols-2 gap-4">
                 <input type="number" placeholder="موجودی" className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border-none" value={form.stock} onChange={e => setForm({...form, stock: parseInt(e.target.value)})} />

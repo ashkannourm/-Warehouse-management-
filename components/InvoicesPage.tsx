@@ -32,9 +32,13 @@ const InvoicesPage: React.FC<InvoicesPageProps> = ({ invoices, setInvoices, prod
   const [activeCategory, setActiveCategory] = useState('');
   const [activeItem, setActiveItem] = useState<{ productId: string, quantity: number }>({ productId: '', quantity: 1 });
 
+  const sortedCategories = useMemo(() => {
+    return [...categories].sort((a, b) => a.name.localeCompare(b.name, 'fa'));
+  }, [categories]);
+
   const filteredProducts = useMemo(() => {
     if (!activeCategory) return [];
-    return products.filter(p => p.category === activeCategory);
+    return products.filter(p => p.category === activeCategory).sort((a, b) => a.name.localeCompare(b.name, 'fa'));
   }, [activeCategory, products]);
 
   const filteredCustomers = useMemo(() => {
@@ -46,43 +50,62 @@ const InvoicesPage: React.FC<InvoicesPageProps> = ({ invoices, setInvoices, prod
     return products.find(p => p.id === activeItem.productId);
   }, [activeItem.productId, products]);
 
-  const sendTelegramNotification = async (invoice: Invoice, isInitial: boolean = false) => {
+  const sendTelegramNotification = async (invoice: Invoice, target: 'ADMIN' | 'STOCKMAN' | 'BOTH') => {
     const token = telegramConfig?.botToken?.trim();
-    const chat = telegramConfig?.chatId?.trim();
+    if (!telegramConfig?.enabled || !token) return;
 
-    if (!telegramConfig?.enabled || !token || !chat) return;
+    const chatIds: string[] = [];
+    if (target === 'ADMIN' || target === 'BOTH') {
+      if (telegramConfig.adminChatId) chatIds.push(telegramConfig.adminChatId);
+    }
+    if (target === 'STOCKMAN' || target === 'BOTH') {
+      if (telegramConfig.stockmanChatId) chatIds.push(telegramConfig.stockmanChatId);
+    }
+
+    if (chatIds.length === 0) return;
 
     const itemsText = invoice.items.map(i => `▫️ <b>${i.productName}</b>: ${i.quantity} عدد`).join('\n');
-    const typeLabel = invoice.type === InvoiceType.INCOMING ? '📥 ورود' : '📤 خروج';
+    const typeLabel = invoice.type === InvoiceType.INCOMING ? '📥 ورود به انبار' : '📤 خروج از انبار';
+    const isPending = invoice.status === InvoiceStatus.PENDING;
     
     const message = `
-${isInitial ? '🆕 <b>ثبت حواله جدید (در انتظار تایید انبار)</b>' : '✅ <b>حواله تایید و خارج شد</b>'}
+🔔 <b>اطلاعیه جدید واحد انبار</b>
+————————————————
+${isPending ? '📦 <b>ثبت حواله جدید (منتظر تایید انبار)</b>' : '✅ <b>حواله تایید و نهایی شد</b>'}
 
-🆔 شماره: <code>${invoice.id}</code>
-📂 نوع: ${typeLabel}
-👤 مشتری: <b>${invoice.customerName}</b>
+🆔 شماره حواله: <code>${invoice.id}</code>
+📂 نوع عملیات: ${typeLabel}
 📅 تاریخ: ${invoice.date}
+⏰ زمان: ${invoice.time}
 
-📋 <b>اقلام:</b>
+👤 <b>اطلاعات مشتری/طرف حساب:</b>
+نام: <b>${invoice.customerName}</b>
+${invoice.customerPhone ? `📞 تماس: ${invoice.customerPhone}` : ''}
+${invoice.customerAddress ? `📍 آدرس: <i>${invoice.customerAddress}</i>` : ''}
+
+📋 <b>لیست اقلام:</b>
 ${itemsText}
 
+————————————————
 👤 صادر کننده: ${invoice.sellerName}
-${!isInitial ? `📦 تایید انبار: ${currentUser.name}` : '⏳ وضعیت: منتظر تایید انباردار'}
+${isPending ? '⚠️ <b>انباردار محترم، لطفاً جهت آماده‌سازی و ارسال بار اقدام نمایید.</b>' : `✅ تایید نهایی توسط انباردار`}
 ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.description}</i>` : ''}
     `;
 
-    try {
-      await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          chat_id: chat,
-          text: message,
-          parse_mode: 'HTML'
-        })
-      });
-    } catch (error) {
-      console.error('Telegram notification failed:', error);
+    for (const chatId of chatIds) {
+      try {
+        await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            chat_id: chatId,
+            text: message,
+            parse_mode: 'HTML'
+          })
+        });
+      } catch (error) {
+        console.error('Telegram notification failed:', error);
+      }
     }
   };
 
@@ -123,6 +146,7 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
             customerName: selectedCustomer.name,
             customerPhone: selectedCustomer.phone,
             customerAddress: selectedCustomer.address,
+            customerLocation: selectedCustomer.locationUrl || '',
             items: newInvoice.items as InvoiceItem[],
             description: newInvoice.description || '',
           };
@@ -138,6 +162,7 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
         customerName: selectedCustomer.name,
         customerPhone: selectedCustomer.phone,
         customerAddress: selectedCustomer.address,
+        customerLocation: selectedCustomer.locationUrl || '',
         sellerName: currentUser.name,
         date: now.toLocaleDateString('fa-IR'),
         time: now.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }),
@@ -146,8 +171,7 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
         description: newInvoice.description || '',
       };
       setInvoices([finalInvoice, ...invoices]);
-      // ارسال پیام اطلاع رسانی اولیه برای مدیر
-      sendTelegramNotification(finalInvoice, true);
+      sendTelegramNotification(finalInvoice, 'BOTH');
     }
 
     setShowForm(false);
@@ -200,7 +224,7 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
 
     const confirmedInvoice = updatedInvoices.find(inv => inv.id === id);
     if (confirmedInvoice) {
-      sendTelegramNotification(confirmedInvoice, false);
+      sendTelegramNotification(confirmedInvoice, 'ADMIN');
     }
   };
 
@@ -249,8 +273,8 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
           </div>
         </div>
         <table>
-          <thead><tr><th>نام محصول</th><th>تعداد</th></tr></thead>
-          <tbody>${inv.items.map((item) => `<tr><td>${item.productName}</td><td>${item.quantity}</td></tr>`).join('')}</tbody>
+          <thead><tr><th style="width:50px">تصویر</th><th>نام محصول</th><th>تعداد</th></tr></thead>
+          <tbody>${inv.items.map((item) => `<tr><td style="padding: 5px;"><img src="${item.image || ''}" style="width:40px; height:40px; border-radius:4px;" /></td><td>${item.productName}</td><td>${item.quantity}</td></tr>`).join('')}</tbody>
         </table>
         ${inv.description ? `<div class="desc-area">توضیحات فروشنده: ${inv.description}</div>` : ''}
         <div class="footer-signs">
@@ -275,35 +299,48 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
       </div>
 
       <div className="grid grid-cols-1 gap-4">
-        {invoices.map(inv => (
-          <div 
-            key={inv.id} 
-            onClick={() => setSelectedInvoice(inv)}
-            className="bg-white dark:bg-slate-900 p-4 lg:p-6 rounded-2xl lg:rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-blue-400 hover:shadow-lg transition-all"
-          >
-            <div className="flex gap-4 items-center">
-              <div className={`w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl lg:text-2xl shadow-inner shrink-0 ${inv.type === InvoiceType.INCOMING ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
-                {inv.type === InvoiceType.INCOMING ? '📥' : '📤'}
+        {invoices.map(inv => {
+          const canModify = currentUser.role === UserRole.ADMIN || (currentUser.role === UserRole.SALES && inv.status === InvoiceStatus.PENDING);
+          
+          return (
+            <div 
+              key={inv.id} 
+              onClick={() => setSelectedInvoice(inv)}
+              className="bg-white dark:bg-slate-900 p-4 lg:p-6 rounded-2xl lg:rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:border-blue-400 hover:shadow-lg transition-all"
+            >
+              <div className="flex gap-4 items-center">
+                <div className={`w-12 h-12 lg:w-14 lg:h-14 rounded-xl lg:rounded-2xl flex items-center justify-center text-xl lg:text-2xl shadow-inner shrink-0 ${inv.type === InvoiceType.INCOMING ? 'bg-green-100 dark:bg-green-900/30 text-green-600' : 'bg-red-100 dark:bg-red-900/30 text-red-600'}`}>
+                  {inv.type === InvoiceType.INCOMING ? '📥' : '📤'}
+                </div>
+                <div className="min-w-0">
+                  <h4 className="font-bold text-sm lg:text-lg text-gray-800 dark:text-gray-100 truncate">{inv.customerName}</h4>
+                  <p className="text-[10px] lg:text-xs text-gray-400 font-medium">{inv.date} | {inv.sellerName}</p>
+                  {/* Visible location for Stockman directly on the list */}
+                  {currentUser.role === UserRole.STOCKMAN && inv.customerLocation && (
+                    <div className="mt-2 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold flex items-center gap-1">
+                      📍 لوکیشن مشتری آماده مسیریابی
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="min-w-0">
-                <h4 className="font-bold text-sm lg:text-lg text-gray-800 dark:text-gray-100 truncate">{inv.customerName}</h4>
-                <p className="text-[10px] lg:text-xs text-gray-400 font-medium">{inv.date} | {inv.sellerName}</p>
+              <div className={`text-[10px] lg:text-xs font-bold px-3 py-1.5 lg:px-5 lg:py-2 rounded-full border shrink-0 self-start sm:self-center ${inv.status === InvoiceStatus.PENDING ? 'bg-red-50 dark:bg-red-900/30 text-red-600 border-red-100 dark:border-red-900/50' : 'bg-green-50 dark:bg-green-900/30 text-green-600 border-green-100 dark:border-green-900/50'}`}>
+                  {inv.status === InvoiceStatus.PENDING ? 'انتظار تایید' : 'ارسال شده'}
+              </div>
+              <div className="flex gap-2 justify-end" onClick={e => e.stopPropagation()}>
+                  {currentUser.role === UserRole.STOCKMAN && inv.customerLocation && (
+                    <button onClick={() => window.open(inv.customerLocation, '_blank')} className="p-2 lg:p-2.5 bg-emerald-50 dark:bg-emerald-900/30 rounded-lg lg:rounded-xl hover:bg-emerald-100 dark:hover:bg-emerald-800 text-emerald-600 dark:text-emerald-400 transition border border-emerald-100 dark:border-emerald-800" title="مشاهده لوکیشن روی نقشه">📍</button>
+                  )}
+                  {canModify && (
+                    <>
+                      <button onClick={() => handleEditInvoice(inv)} className="p-2 lg:p-2.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-300 rounded-lg lg:rounded-xl hover:bg-blue-100 transition border border-blue-100 dark:border-blue-900/50" title="ویرایش حواله">✏️</button>
+                      <button onClick={() => handleDeleteInvoice(inv.id)} className="p-2 lg:p-2.5 bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400 rounded-lg lg:rounded-xl hover:bg-red-100 transition border border-red-100 dark:border-red-900/50" title="حذف حواله">🗑️</button>
+                    </>
+                  )}
+                  <button onClick={() => handleDownloadPDF(inv)} className="p-2 lg:p-2.5 bg-gray-50 dark:bg-slate-800 rounded-lg lg:rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 transition border border-gray-100 dark:border-slate-700" title="چاپ">🖨️</button>
               </div>
             </div>
-            <div className={`text-[10px] lg:text-xs font-bold px-3 py-1.5 lg:px-5 lg:py-2 rounded-full border shrink-0 self-start sm:self-center ${inv.status === InvoiceStatus.PENDING ? 'bg-red-50 dark:bg-red-900/30 text-red-600 border-red-100 dark:border-red-900/50' : 'bg-green-50 dark:bg-green-900/30 text-green-600 border-green-100 dark:border-green-900/50'}`}>
-                {inv.status === InvoiceStatus.PENDING ? 'انتظار تایید' : 'ارسال شده'}
-            </div>
-            <div className="flex gap-2 justify-end" onClick={e => e.stopPropagation()}>
-                {((currentUser.role === UserRole.SALES && inv.status === InvoiceStatus.PENDING) || currentUser.role === UserRole.ADMIN) && (
-                  <button onClick={() => handleEditInvoice(inv)} className="p-2 lg:p-2.5 bg-gray-50 dark:bg-slate-800 rounded-lg lg:rounded-xl hover:bg-amber-50 dark:hover:bg-amber-900/30 hover:text-amber-600 transition border border-gray-100 dark:border-slate-700">✏️</button>
-                )}
-                <button onClick={() => handleDownloadPDF(inv)} className="p-2 lg:p-2.5 bg-gray-50 dark:bg-slate-800 rounded-lg lg:rounded-xl hover:bg-blue-50 dark:hover:bg-blue-900/30 hover:text-blue-600 transition border border-gray-100 dark:border-slate-700">🖨️</button>
-                {currentUser.role === UserRole.ADMIN && (
-                   <button onClick={() => handleDeleteInvoice(inv.id)} className="p-2 lg:p-2.5 bg-red-50 text-red-500 rounded-lg lg:rounded-xl hover:bg-red-600 hover:text-white transition border border-red-100 dark:border-red-900/50">🗑️</button>
-                )}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
       {selectedInvoice && (
@@ -321,6 +358,17 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
                         <p className="text-gray-400 font-medium">مشتری:</p>
                         <p className="font-bold text-base lg:text-xl">{selectedInvoice.customerName}</p>
                         <p className="text-gray-500 dark:text-gray-400">{selectedInvoice.customerPhone}</p>
+                        {selectedInvoice.customerLocation && (
+                          <div className="mt-3 bg-emerald-50 dark:bg-emerald-900/20 p-3 rounded-xl border border-emerald-100 dark:border-emerald-800">
+                             <p className="text-[10px] text-emerald-600 dark:text-emerald-400 font-bold mb-2">لوکیشن دقیق مشتری:</p>
+                             <button 
+                              onClick={() => window.open(selectedInvoice.customerLocation, '_blank')}
+                              className="w-full flex items-center justify-center gap-2 bg-emerald-600 text-white py-2.5 rounded-lg font-bold hover:bg-emerald-700 transition shadow-md text-xs"
+                            >
+                              📍 مسیریابی و مشاهده روی نقشه
+                            </button>
+                          </div>
+                        )}
                     </div>
                     <div className="sm:text-left space-y-1">
                         <p className="text-gray-400 font-medium">زمان ثبت:</p>
@@ -339,11 +387,23 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
                  <div className="border border-gray-100 dark:border-slate-800 rounded-xl lg:rounded-2xl overflow-hidden shadow-sm">
                     <table className="w-full text-right text-xs lg:text-sm">
                        <thead className="bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-300">
-                          <tr><th className="p-3 lg:p-4 text-right">شرح کالا</th><th className="p-3 lg:p-4 text-center">تعداد</th></tr>
+                          <tr><th className="p-3 lg:p-4 text-right">تصویر</th><th className="p-3 lg:p-4 text-right">شرح کالا</th><th className="p-3 lg:p-4 text-center">تعداد</th></tr>
                        </thead>
                        <tbody className="text-gray-800 dark:text-gray-200">
                           {selectedInvoice.items.map((item, i) => (
-                             <tr key={i} className="border-t border-gray-50 dark:border-slate-800"><td className="p-3 lg:p-4 font-bold">{item.productName}</td><td className="p-3 lg:p-4 font-bold text-blue-600 dark:text-blue-400 text-center">{item.quantity}</td></tr>
+                             <tr key={i} className="border-t border-gray-50 dark:border-slate-800">
+                                <td className="p-3 lg:p-4">
+                                  <div className="w-10 h-10 rounded-lg overflow-hidden border dark:border-slate-700 bg-gray-50 dark:bg-slate-800">
+                                    {item.image ? (
+                                      <img src={item.image} className="w-full h-full object-cover" alt={item.productName} />
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center text-gray-400 text-[10px]">📦</div>
+                                    )}
+                                  </div>
+                                </td>
+                                <td className="p-3 lg:p-4 font-bold">{item.productName}</td>
+                                <td className="p-3 lg:p-4 font-bold text-blue-600 dark:text-blue-400 text-center">{item.quantity}</td>
+                             </tr>
                           ))}
                        </tbody>
                     </table>
@@ -424,7 +484,7 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                     <select className="w-full p-3 lg:p-4 rounded-xl bg-slate-800 text-white outline-none font-bold shadow-md text-sm" value={activeCategory} onChange={(e) => setActiveCategory(e.target.value)}>
                         <option value="" className="bg-white text-gray-900">دسته کالا...</option>
-                        {categories.map(c => <option key={c.id} value={c.name} className="bg-white text-gray-900">{c.name}</option>)}
+                        {sortedCategories.map(c => <option key={c.id} value={c.name} className="bg-white text-gray-900">{c.name}</option>)}
                     </select>
                     <select className="w-full p-3 lg:p-4 rounded-xl bg-slate-800 text-white outline-none font-bold shadow-md text-sm" value={activeItem.productId} onChange={(e) => setActiveItem({...activeItem, productId: e.target.value})}>
                         <option value="" className="bg-white text-gray-900">انتخاب کالا...</option>
@@ -479,6 +539,13 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
                   {newInvoice.items?.map((item, idx) => (
                     <div key={idx} className="bg-white dark:bg-slate-800 p-3 lg:p-4 rounded-xl lg:rounded-2xl border border-blue-100 dark:border-blue-900 flex justify-between items-center text-gray-900 dark:text-gray-100 shadow-sm text-sm">
                         <div className="flex items-center gap-3">
+                           <div className="w-10 h-10 shrink-0 bg-gray-50 dark:bg-slate-700 rounded-lg overflow-hidden border border-gray-100 dark:border-slate-600">
+                             {item.image ? (
+                               <img src={item.image} className="w-full h-full object-cover" alt={item.productName} />
+                             ) : (
+                               <div className="w-full h-full flex items-center justify-center text-[10px] text-gray-400">📦</div>
+                             )}
+                           </div>
                            <span className="font-bold text-gray-800 dark:text-gray-100 truncate max-w-[120px] sm:max-w-none">{item.productName}</span>
                         </div>
                         <div className="flex items-center gap-3">
@@ -494,7 +561,6 @@ ${invoice.description ? `\n📝 توضیحات فروشنده: <i>${invoice.desc
                 </div>
               </div>
 
-              {/* Description Field */}
               <div className="space-y-3">
                 <label className="block text-xs lg:text-sm text-gray-600 dark:text-gray-300 font-bold pr-2">📝 توضیحات فروشنده (برای انباردار)</label>
                 <textarea 

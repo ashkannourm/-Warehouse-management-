@@ -13,14 +13,23 @@ export interface User {
   role: UserRole;
 }
 
+export interface ChatMessage {
+  id: string;
+  senderId: string;
+  senderName: string;
+  text: string;
+  timestamp: number;
+}
+
 export interface TelegramConfig {
   botToken: string;
-  chatId: string;
+  adminChatId: string;
+  stockmanChatId: string;
   enabled: boolean;
 }
 
 export interface AppConfig {
-  uploadUrl: string; // URL of the upload script on Ubuntu server
+  uploadUrl: string;
   telegram: TelegramConfig;
 }
 
@@ -53,6 +62,7 @@ export interface Customer {
   name: string;
   phone: string;
   address: string;
+  locationUrl?: string;
 }
 
 export interface InvoiceItem {
@@ -68,6 +78,7 @@ export interface Invoice {
   customerName: string;
   customerPhone?: string;
   customerAddress?: string;
+  customerLocation?: string;
   sellerName: string;
   date: string;
   time: string;

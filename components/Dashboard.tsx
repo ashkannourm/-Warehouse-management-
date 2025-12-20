@@ -1,22 +1,38 @@
 
-import React from 'react';
-import { Invoice, Product, InvoiceStatus } from '../types';
+import React, { useMemo } from 'react';
+import { Invoice, Product, InvoiceStatus, User, UserRole } from '../types';
 
 interface DashboardProps {
   invoices: Invoice[];
   products: Product[];
+  currentUser: User;
 }
 
-const Dashboard: React.FC<DashboardProps> = ({ invoices, products }) => {
+const Dashboard: React.FC<DashboardProps> = ({ invoices, products, currentUser }) => {
+  // فیلتر کردن حواله‌ها بر اساس نقش کاربر
+  // اگر کاربر فروشنده است، فقط حواله‌هایی که خودش صادر کرده را می‌بیند
+  const visibleInvoices = useMemo(() => {
+    if (currentUser.role === UserRole.SALES) {
+      return invoices.filter(inv => inv.sellerName === currentUser.name);
+    }
+    return invoices;
+  }, [invoices, currentUser]);
+
   const stats = [
-    { label: 'کل حواله‌ها', value: invoices.length, icon: '📄', color: 'bg-blue-600' },
-    { label: 'در انتظار تایید', value: invoices.filter(i => i.status === InvoiceStatus.PENDING).length, icon: '⏳', color: 'bg-amber-500' },
+    { label: 'کل حواله‌ها', value: visibleInvoices.length, icon: '📄', color: 'bg-blue-600' },
+    { label: 'در انتظار تایید', value: visibleInvoices.filter(i => i.status === InvoiceStatus.PENDING).length, icon: '⏳', color: 'bg-amber-500' },
     { label: 'تنوع کالا', value: products.length, icon: '📦', color: 'bg-emerald-600' },
-    { label: 'حواله‌های نهایی', value: invoices.filter(i => i.status === InvoiceStatus.SHIPPED).length, icon: '✅', color: 'bg-indigo-600' },
+    { label: 'حواله‌های نهایی', value: visibleInvoices.filter(i => i.status === InvoiceStatus.SHIPPED).length, icon: '✅', color: 'bg-indigo-600' },
   ];
 
   return (
     <div className="space-y-8 animate-fadeIn">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <h2 className="text-xl font-bold dark:text-white">
+          {currentUser.role === UserRole.SALES ? `وضعیت حواله‌های ${currentUser.name}` : 'وضعیت کلی سامانه'}
+        </h2>
+      </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         {stats.map((stat, idx) => (
           <div key={idx} className="bg-white dark:bg-slate-900 p-6 rounded-2xl shadow-sm border dark:border-slate-800 flex items-center gap-4 transition hover:shadow-md">
@@ -32,15 +48,17 @@ const Dashboard: React.FC<DashboardProps> = ({ invoices, products }) => {
       </div>
 
       <div className="bg-white dark:bg-slate-900 p-4 lg:p-6 rounded-3xl shadow-sm border dark:border-slate-800">
-        <h3 className="text-lg lg:text-xl font-bold mb-6 text-gray-800 dark:text-gray-100 border-b dark:border-slate-800 pb-4">آخرین وضعیت حواله‌ها</h3>
+        <h3 className="text-lg lg:text-xl font-bold mb-6 text-gray-800 dark:text-gray-100 border-b dark:border-slate-800 pb-4">
+          آخرین وضعیت حواله‌ها {currentUser.role === UserRole.SALES && '(شما)'}
+        </h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {invoices.length === 0 ? (
+          {visibleInvoices.length === 0 ? (
             <div className="col-span-full text-center py-16 bg-gray-50 dark:bg-slate-800/50 rounded-2xl text-gray-400">
               <span className="text-4xl block mb-2">📭</span>
-              هنوز هیچ حواله‌ای در سیستم ثبت نشده است.
+              هنوز هیچ حواله‌ای برای نمایش وجود ندارد.
             </div>
           ) : (
-            invoices.slice(-6).reverse().map(inv => (
+            visibleInvoices.slice(-6).reverse().map(inv => (
               <div key={inv.id} className="flex items-center justify-between p-4 lg:p-5 bg-white dark:bg-slate-800 border dark:border-slate-700 rounded-2xl border-gray-100 shadow-sm hover:border-blue-200 transition">
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 mb-1">
