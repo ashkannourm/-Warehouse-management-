@@ -1,10 +1,9 @@
 <img src="https://r2cdn.perplexity.ai/pplx-full-logo-primary-dark%402x.png" style="height:64px;margin-right:32px"/>
 
-# فایلهای نحوه نصب را مجدد نمایش بده
+# نحوه نصب برنامه بر روی سرور Ubuntu
 
-راهنمای نصب که قبلاً برات نوشتم را این‌جا دوباره، به‌صورت یک فایل Markdown قابل‌کپی می‌گذارم تا مستقیماً در گیت‌هاب استفاده کنی.[^1][^2]
 
-```markdown
+
 # Warehouse App – Server Installation Guide
 
 این راهنما نحوه استقرار برنامه مدیریت انبار روی سرور Ubuntu با Nginx و Firebase را توضیح می‌دهد. در مثال‌ها، `YOUR_IP` و `YOUR_DOMAIN` را با اطلاعات واقعی سرور خود جایگزین کنید.
@@ -15,27 +14,26 @@
 
 ### 1.1 ایجاد فولدر پروژه
 
-```
 
+```Bash
 sudo mkdir -p /var/www/warehouse-app
 cd /var/www/warehouse-app
-
 ```
 
 فایل zip پروژه را به این مسیر منتقل کنید (مثلاً با `scp`) و سپس:
 
-```
 
+```Bash
 apt install -y unzip
 unzip your-project.zip   \# نام واقعی فایل را بگذارید
 
 ```
 
----
+
 
 ## 2. نصب Node.js و ساختن پروژه
 
-```
+```Bash
 
 apt install -y npm nodejs
 cd /var/www/warehouse-app
