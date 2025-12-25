@@ -18,51 +18,80 @@ const MapPickerModal: React.FC<{
   const mapRef = useRef<any>(null);
   const markerRef = useRef<any>(null);
   const [selectedCoords, setSelectedCoords] = useState<{ lat: number, lng: number } | null>(null);
+  const [isMapReady, setIsMapReady] = useState(false);
 
   useEffect(() => {
+    let timeoutId: number;
+    let isActive = true;
+    
     if (isOpen && mapContainerRef.current) {
-      // Default to Tehran if no initial URL
-      let lat = 35.6892;
-      let lng = 51.3890;
+      timeoutId = window.setTimeout(() => {
+        if (!isActive || !mapContainerRef.current) return;
 
-      if (initialUrl) {
-        const match = initialUrl.match(/query=([-+]?\d*\.\d+|\d+),([-+]?\d*\.\d+|\d+)/);
-        if (match) {
-          lat = parseFloat(match[1]);
-          lng = parseFloat(match[2]);
+        const L = (window as any).L;
+        if (!L) return;
+
+        // Leaflet Cleanup Check
+        const container = mapContainerRef.current;
+        if ((container as any)._leaflet_id) return;
+
+        let lat = 35.6892;
+        let lng = 51.3890;
+
+        if (initialUrl) {
+          const match = initialUrl.match(/query=([-+]?\d*\.\d+|\d+),([-+]?\d*\.\d+|\d+)/);
+          if (match) {
+            lat = parseFloat(match[1]);
+            lng = parseFloat(match[2]);
+          }
         }
-      }
 
-      const L = (window as any).L;
-      if (!mapRef.current) {
-        mapRef.current = L.map(mapContainerRef.current).setView([lat, lng], 14);
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors'
-        }).addTo(mapRef.current);
+        try {
+          mapRef.current = L.map(container, {
+            zoomControl: false,
+            attributionControl: false
+          }).setView([lat, lng], 15);
 
-        markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(mapRef.current);
-        setSelectedCoords({ lat, lng });
+          L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png', {
+            maxZoom: 19
+          }).addTo(mapRef.current);
 
-        mapRef.current.on('click', (e: any) => {
-          const { lat, lng } = e.latlng;
-          markerRef.current.setLatLng([lat, lng]);
+          markerRef.current = L.marker([lat, lng], { draggable: true }).addTo(mapRef.current);
           setSelectedCoords({ lat, lng });
-        });
+          setIsMapReady(true);
 
-        markerRef.current.on('dragend', () => {
-          const pos = markerRef.current.getLatLng();
-          setSelectedCoords({ lat: pos.lat, lng: pos.lng });
-        });
-      }
+          setTimeout(() => {
+              if (mapRef.current) mapRef.current.invalidateSize();
+          }, 100);
 
-      // Cleanup on unmount or close
-      return () => {
-        if (mapRef.current) {
-          mapRef.current.remove();
-          mapRef.current = null;
+          mapRef.current.on('click', (e: any) => {
+            const { lat, lng } = e.latlng;
+            if (markerRef.current) markerRef.current.setLatLng([lat, lng]);
+            setSelectedCoords({ lat, lng });
+          });
+
+          markerRef.current.on('dragend', () => {
+            const pos = markerRef.current.getLatLng();
+            setSelectedCoords({ lat: pos.lat, lng: pos.lng });
+          });
+        } catch (error) {
+          console.error("Map creation failed:", error);
         }
-      };
+      }, 400);
     }
+
+    return () => {
+      isActive = false;
+      if (timeoutId) clearTimeout(timeoutId);
+      if (mapRef.current) {
+        try { 
+            mapRef.current.off();
+            mapRef.current.remove(); 
+        } catch (e) {}
+        mapRef.current = null;
+      }
+      setIsMapReady(false);
+    };
   }, [isOpen]);
 
   const handleConfirm = () => {
@@ -76,31 +105,23 @@ const MapPickerModal: React.FC<{
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[100] animate-fadeIn">
-      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl border border-white/20">
+    <div className="fixed inset-0 bg-black/70 backdrop-blur-md flex items-center justify-center p-4 z-[1000] animate-fadeIn">
+      <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] w-full max-w-2xl overflow-hidden shadow-2xl border dark:border-slate-800">
         <div className="p-6 bg-blue-600 text-white flex justify-between items-center">
-          <h3 className="text-xl font-bold flex items-center gap-2">📍 انتخاب لوکیشن مشتری</h3>
-          <button onClick={onClose} className="text-2xl">&times;</button>
+          <h3 className="text-xl font-bold flex items-center gap-2 font-['IRANSans']">📍 انتخاب لوکیشن دقیق مشتری</h3>
+          <button onClick={onClose} className="text-2xl leading-none">&times;</button>
         </div>
         <div className="p-4 space-y-4">
-          <div 
-            ref={mapContainerRef} 
-            className="w-full h-[400px] rounded-2xl overflow-hidden border-4 border-slate-100 dark:border-slate-800"
-          ></div>
-          <p className="text-xs text-gray-500 text-center font-bold">نشانگر را روی محل دقیق مشتری قرار دهید یا روی نقشه کلیک کنید.</p>
+          <div ref={mapContainerRef} className="relative w-full h-[380px] sm:h-[450px] rounded-2xl overflow-hidden border-4 border-slate-100 dark:border-slate-800 bg-slate-200 shadow-inner">
+            {!isMapReady && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center z-10 bg-slate-100 dark:bg-slate-800">
+                <div className="w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
+          </div>
           <div className="flex gap-3">
-            <button 
-              onClick={handleConfirm}
-              className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg"
-            >
-              تایید و ثبت موقعیت
-            </button>
-            <button 
-              onClick={onClose}
-              className="flex-1 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 py-4 rounded-xl font-bold hover:bg-gray-200 transition"
-            >
-              انصراف
-            </button>
+            <button onClick={handleConfirm} className="flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold shadow-lg active:scale-95 font-['IRANSans']">تایید و ثبت موقعیت</button>
+            <button onClick={onClose} className="flex-1 bg-gray-100 dark:bg-slate-800 text-gray-600 py-4 rounded-xl font-bold font-['IRANSans']">انصراف</button>
           </div>
         </div>
       </div>
@@ -113,12 +134,6 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, setCustomers, 
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [formData, setFormData] = useState({ name: '', phone: '', address: '', locationUrl: '' });
-
-  const handleOpenAdd = () => {
-    setEditingId(null);
-    setFormData({ name: '', phone: '', address: '', locationUrl: '' });
-    setShowModal(true);
-  };
 
   const handleOpenEdit = (c: Customer) => {
     setEditingId(c.id);
@@ -136,129 +151,55 @@ const CustomersPage: React.FC<CustomersPageProps> = ({ customers, setCustomers, 
     setShowModal(false);
   };
 
-  const handleDelete = (id: string) => {
-    const isConfirmed = window.confirm('آیا مایل به حذف این مشتری از لیست هستید؟');
-    if (isConfirmed) {
-      setCustomers(customers.filter(c => c.id !== id));
-    }
-  };
-
   const openMap = (url?: string) => {
-    if (url) {
-      window.open(url, '_blank');
-    } else {
-      alert('لوکیشن برای این مشتری ثبت نشده است.');
-    }
+    if (!url) return alert('لوکیشن ثبت نشده است.');
+    window.open(url, '_blank');
   };
 
   return (
-    <div className="space-y-6 text-right" dir="rtl">
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <h2 className="text-lg lg:text-xl font-bold text-gray-800 dark:text-gray-100">بانک مشتریان</h2>
-        <button onClick={handleOpenAdd} className="w-full sm:w-auto bg-blue-600 text-white px-5 py-2.5 rounded-xl hover:bg-blue-700 transition font-bold shadow-lg">➕ مشتری جدید</button>
+    <div className="space-y-6 text-right animate-fadeIn" dir="rtl">
+      <div className="flex justify-between items-center px-2">
+        <h2 className="text-xl font-bold text-gray-800 dark:text-gray-100 font-['IRANSans']">بانک مشتریان</h2>
+        <button onClick={() => { setEditingId(null); setFormData({name:'', phone:'', address:'', locationUrl:''}); setShowModal(true); }} className="bg-blue-600 text-white px-6 py-3 rounded-2xl font-bold shadow-lg">➕ افزودن مشتری</button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {customers.map(customer => (
-          <div key={customer.id} className="bg-white dark:bg-slate-900 p-5 lg:p-6 rounded-2xl lg:rounded-3xl shadow-sm border border-gray-100 dark:border-slate-800 space-y-4 relative group hover:shadow-xl transition-all text-right">
-            <h3 className="font-bold text-lg lg:text-xl text-gray-800 dark:text-gray-100">{customer.name}</h3>
-            <div className="space-y-2">
-              <p className="text-gray-600 dark:text-gray-400 text-xs lg:text-sm flex items-center gap-2">
-                <span className="text-blue-500">📞</span> {customer.phone}
-              </p>
-              <p className="text-gray-400 text-[10px] lg:text-xs min-h-[40px] leading-relaxed">
-                <span className="text-blue-500">📍</span> {customer.address}
-              </p>
-            </div>
-            <div className="pt-4 border-t dark:border-slate-800 grid grid-cols-2 gap-2">
-               <button onClick={() => openMap(customer.locationUrl)} className="flex items-center justify-center gap-1 bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 py-2 rounded-xl text-xs font-bold border border-emerald-100 dark:border-emerald-800 transition">
-                  📍 نقشه
-               </button>
-               <button onClick={() => handleOpenEdit(customer)} className="text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 py-2 rounded-xl text-xs font-bold border border-blue-50 dark:border-slate-800 transition">
-                  ویرایش
-               </button>
-               <button 
-                type="button"
-                onClick={() => handleDelete(customer.id)} 
-                className="col-span-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 py-2 rounded-xl text-xs font-bold border border-red-50 dark:border-slate-800 transition"
-               >
-                 حذف مشتری
-               </button>
+          <div key={customer.id} className="bg-white dark:bg-slate-900 p-6 rounded-[2rem] shadow-sm border border-gray-100 dark:border-slate-800 space-y-4 transition-all hover:shadow-xl">
+            <h3 className="font-bold text-lg dark:text-white">{customer.name}</h3>
+            <p className="text-gray-600 dark:text-gray-400 text-sm">📞 {customer.phone}</p>
+            <p className="text-gray-400 text-xs leading-relaxed">📍 {customer.address}</p>
+            <div className="pt-4 border-t dark:border-slate-800 grid grid-cols-2 gap-3">
+               <button onClick={() => openMap(customer.locationUrl)} className="bg-emerald-50 text-emerald-600 py-2.5 rounded-xl text-xs font-bold transition hover:bg-emerald-100">📍 مسیریابی</button>
+               <button onClick={() => handleOpenEdit(customer)} className="text-blue-600 py-2.5 rounded-xl text-xs font-bold border border-blue-50 transition hover:bg-blue-50">ویرایش</button>
+               <button onClick={() => { if(window.confirm('حذف؟')) setCustomers(customers.filter(c => c.id !== customer.id)); }} className="col-span-2 text-red-500 py-2.5 rounded-xl text-xs font-bold border border-red-50">حذف</button>
             </div>
           </div>
         ))}
       </div>
 
       {showModal && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 text-right overflow-y-auto">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl lg:rounded-3xl p-6 lg:p-8 w-full max-w-md shadow-2xl scale-in my-auto">
-            <h3 className="text-xl lg:text-2xl font-bold mb-6 text-gray-900 dark:text-gray-100">{editingId ? 'ویرایش مشتری' : 'ثبت مشتری جدید'}</h3>
-            <form onSubmit={handleSave} className="space-y-4 lg:space-y-5">
-              <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5 font-bold">نام و نام خانوادگی / شرکت</label>
-                <input 
-                  type="text" 
-                  className="w-full p-3 lg:p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white border-none outline-none focus:ring-2 focus:ring-blue-500 text-sm" 
-                  value={formData.name} 
-                  onChange={(e) => setFormData({...formData, name: e.target.value})} 
-                  required 
-                />
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-[500] overflow-y-auto">
+          <div className="bg-white dark:bg-slate-900 rounded-[2.5rem] p-8 w-full max-w-md shadow-2xl my-auto border dark:border-slate-800">
+            <h3 className="text-xl font-bold mb-6 dark:text-white">مشخصات مشتری</h3>
+            <form onSubmit={handleSave} className="space-y-5 font-['IRANSans']">
+              <input type="text" className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border-none outline-none font-bold" placeholder="نام مشتری" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
+              <input type="text" className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border-none outline-none font-bold" placeholder="شماره تماس" value={formData.phone} onChange={(e) => setFormData({...formData, phone: e.target.value})} required />
+              <div className="flex gap-2">
+                <input type="url" placeholder="لینک نقشه..." className="flex-1 p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border-none font-mono text-[10px]" value={formData.locationUrl} onChange={(e) => setFormData({...formData, locationUrl: e.target.value})} />
+                <button type="button" onClick={() => setShowMapPicker(true)} className="bg-emerald-600 text-white px-5 rounded-2xl text-xs font-bold">🗺️ نقشه</button>
               </div>
-              <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5 font-bold">شماره تماس</label>
-                <input 
-                  type="text" 
-                  className="w-full p-3 lg:p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white border-none focus:ring-2 focus:ring-blue-500 text-sm" 
-                  value={formData.phone} 
-                  onChange={(e) => setFormData({...formData, phone: e.target.value})} 
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5 font-bold">لوکیشن مشتری</label>
-                <div className="flex gap-2">
-                  <input 
-                    type="url" 
-                    placeholder="https://maps.google.com/..."
-                    className="flex-1 p-3 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white border-none focus:ring-2 focus:ring-blue-500 text-xs font-mono" 
-                    value={formData.locationUrl} 
-                    onChange={(e) => setFormData({...formData, locationUrl: e.target.value})} 
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => setShowMapPicker(true)}
-                    className="bg-emerald-600 text-white px-4 rounded-xl hover:bg-emerald-700 transition shadow-md text-xs font-bold flex items-center gap-1 shrink-0"
-                  >
-                    <span>🗺️</span> انتخاب
-                  </button>
-                </div>
-              </div>
-              <div>
-                <label className="block text-sm text-gray-700 dark:text-gray-300 mb-1.5 font-bold">آدرس دقیق</label>
-                <textarea 
-                  className="w-full p-3 lg:p-3.5 rounded-xl bg-slate-100 dark:bg-slate-800 text-gray-900 dark:text-white border-none focus:ring-2 focus:ring-blue-500 text-sm" 
-                  rows={3} 
-                  value={formData.address} 
-                  onChange={(e) => setFormData({...formData, address: e.target.value})} 
-                  required 
-                />
-              </div>
-              <div className="flex flex-col sm:flex-row gap-3 mt-6 lg:mt-8">
-                <button type="submit" className="w-full sm:flex-1 bg-blue-600 text-white py-4 rounded-xl font-bold hover:bg-blue-700 transition shadow-lg">ذخیره مشتری</button>
-                <button type="button" onClick={() => setShowModal(false)} className="w-full sm:flex-1 bg-gray-100 dark:bg-slate-800 text-gray-600 dark:text-gray-400 py-4 rounded-xl font-bold hover:bg-gray-200 transition">انصراف</button>
+              <textarea className="w-full p-4 rounded-2xl bg-slate-50 dark:bg-slate-800 dark:text-white border-none outline-none font-bold text-sm" placeholder="آدرس پستی" rows={3} value={formData.address} onChange={(e) => setFormData({...formData, address: e.target.value})} required />
+              <div className="flex gap-4">
+                <button type="submit" className="flex-[2] bg-blue-600 text-white py-4 rounded-2xl font-bold">ذخیره</button>
+                <button type="button" onClick={() => setShowModal(false)} className="flex-1 bg-gray-100 dark:bg-slate-800 text-gray-500 py-4 rounded-2xl font-bold">لغو</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* Map Picker Modal Component */}
-      <MapPickerModal 
-        isOpen={showMapPicker} 
-        onClose={() => setShowMapPicker(false)}
-        onConfirm={(url) => setFormData({...formData, locationUrl: url})}
-        initialUrl={formData.locationUrl}
-      />
+      <MapPickerModal isOpen={showMapPicker} onClose={() => setShowMapPicker(false)} onConfirm={(url) => setFormData({...formData, locationUrl: url})} initialUrl={formData.locationUrl} />
     </div>
   );
 };

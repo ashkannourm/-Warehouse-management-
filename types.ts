@@ -85,6 +85,14 @@ export interface Invoice {
   status: InvoiceStatus;
   items: InvoiceItem[];
   description?: string;
+  isAlternativeAddress?: boolean;
+  recipientName?: string;
+  recipientPhone?: string;
+  alternativeLocationUrl?: string;
+  shipmentImages?: string[];
+  // فیلدهای جدید
+  isEdited?: boolean;
+  isAccountingDone?: boolean;
 }
 
 export type ImageSize = '1K' | '2K' | '4K';

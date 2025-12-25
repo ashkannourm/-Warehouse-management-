@@ -22,12 +22,59 @@ const FloatingChatBox: React.FC<FloatingChatBoxProps> = ({
   const [isOpen, setIsOpen] = useState(false);
   const [inputText, setInputText] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const prevMessagesCount = useRef(messages.length);
 
-  // منطق تشخیص پیام‌های جدید: پیامی که زمان آن بعد از آخرین مشاهده باشد و فرستنده آن خود کاربر نباشد
+  // منطق تشخیص پیام‌های جدید
   const unreadMessages = messages.filter(
     m => m.timestamp > lastReadTimestamp && m.senderId !== currentUser.id
   );
   const hasUnread = unreadMessages.length > 0;
+  const unreadCount = unreadMessages.length;
+  const displayCount = unreadCount > 9 ? '+9' : unreadCount.toString();
+
+  // درخواست مجوز نوتیفیکیشن در ابتدای کار
+  useEffect(() => {
+    if ("Notification" in window) {
+      if (Notification.permission === "default") {
+        Notification.requestPermission();
+      }
+    }
+  }, []);
+
+  // گوش دادن به پیام‌های جدید برای ارسال نوتیفیکیشن
+  useEffect(() => {
+    // اگر تعداد پیام‌ها افزایش یافته باشد
+    if (messages.length > prevMessagesCount.current) {
+      const latestMsg = messages[messages.length - 1];
+      
+      // اگر پیام از طرف کاربر فعلی نباشد و پنجره چت بسته باشد (یا باز باشد ولی پیام جدید باشد)
+      if (latestMsg.senderId !== currentUser.id) {
+        // اگر کاربر در حال مشاهده پیام‌ها نیست (تایم‌استمپ پیام جدیدتر از آخرین مشاهده است)
+        if (latestMsg.timestamp > lastReadTimestamp) {
+          sendDesktopNotification(latestMsg);
+        }
+      }
+    }
+    prevMessagesCount.current = messages.length;
+  }, [messages, currentUser.id, lastReadTimestamp]);
+
+  const sendDesktopNotification = (msg: ChatMessage) => {
+    if ("Notification" in window && Notification.permission === "granted") {
+      const notification = new Notification(`پیام جدید از ${msg.senderName}`, {
+        body: msg.text,
+        icon: '/favicon.ico', 
+        dir: 'rtl',
+        tag: 'warehouse-chat' 
+      });
+
+      notification.onclick = () => {
+        window.focus();
+        setIsOpen(true);
+        onOpen();
+        notification.close();
+      };
+    }
+  };
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -36,7 +83,6 @@ const FloatingChatBox: React.FC<FloatingChatBoxProps> = ({
   useEffect(() => {
     if (isOpen) {
       scrollToBottom();
-      // وقتی چت باز است، اگر پیام جدیدی بیاید بلافاصله تایم‌استمپ را آپدیت می‌کنیم تا اعلان نشان داده نشود
       const latestMsg = messages[messages.length - 1];
       if (latestMsg && latestMsg.timestamp > lastReadTimestamp) {
         onOpen();
@@ -153,12 +199,11 @@ const FloatingChatBox: React.FC<FloatingChatBoxProps> = ({
       >
         {isOpen ? '✕' : '💬'}
         
-        {/* نقطه قرمز اعلان پیام جدید با انیمیشن و تعداد پیام‌ها */}
         {!isOpen && hasUnread && (
-          <span className="absolute -top-1 -right-1 flex h-6 w-6">
+          <span className="absolute -top-1 -right-1 flex">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
-            <span className="relative inline-flex rounded-full h-6 w-6 bg-red-500 border-2 border-white dark:border-slate-950 flex items-center justify-center shadow-lg">
-               <span className="text-[10px] text-white font-black leading-none">{unreadMessages.length > 9 ? '+9' : unreadMessages.length}</span>
+            <span className={`relative inline-flex rounded-full bg-red-500 border-2 border-white dark:border-slate-950 flex items-center justify-center shadow-lg transition-all duration-300 min-w-[1.5rem] h-6 px-1.5`}>
+               <span className="text-[10px] text-white font-black leading-none">{displayCount}</span>
             </span>
           </span>
         )}

@@ -1,7 +1,8 @@
 
 import React, { useState, useEffect } from 'react';
-import { initializeApp } from 'firebase/app';
+// Fix for Module '"firebase/app"' has no exported member 'initializeApp' by re-ordering and using precise paths
 import { getDatabase, ref, onValue, set, push, remove, get } from 'firebase/database';
+import { initializeApp } from 'firebase/app';
 import { firebaseConfig } from './firebaseConfig';
 import { User, UserRole, Product, Customer, Invoice, Category, AppConfig, ChatMessage } from './types';
 import { INITIAL_USERS, INITIAL_CATEGORIES } from './constants';
@@ -14,6 +15,7 @@ import Dashboard from './components/Dashboard';
 import CategoriesPage from './components/CategoriesPage';
 import SettingsPage from './components/SettingsPage';
 import BackupPage from './components/BackupPage';
+import AnalyticsPage from './components/AnalyticsPage';
 import FloatingChatBox from './components/FloatingChatBox';
 
 const app = initializeApp(firebaseConfig);
@@ -26,7 +28,8 @@ const App: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isDarkMode, setIsDarkMode] = useState(() => localStorage.getItem('darkMode') === 'true');
   const [lastReadTimestamp, setLastReadTimestamp] = useState<number>(() => Number(localStorage.getItem('lastReadChat')) || 0);
-  
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+
   const [users, setUsers] = useState<User[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -38,7 +41,20 @@ const App: React.FC = () => {
     telegram: { botToken: '', adminChatId: '', stockmanChatId: '', enabled: false }
   });
 
-  // Auto-cleanup old messages (older than 10 days)
+  useEffect(() => {
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    });
+  }, []);
+
+  const handleInstall = () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      deferredPrompt.userChoice.then(() => setDeferredPrompt(null));
+    }
+  };
+
   useEffect(() => {
     if (currentUser?.role === UserRole.ADMIN) {
       const cleanupOldMessages = async () => {
@@ -92,22 +108,18 @@ const App: React.FC = () => {
       onValue(ref(db, path), (snapshot) => {
         const val = snapshot.val();
         if (val) {
-          const dataArray = typeof val === 'object' && !Array.isArray(val) ? Object.values(val) : val;
-          if (path === 'config') {
-            setter(val);
-          } else {
-            setter(dataArray as any);
+          let dataArray = typeof val === 'object' && !Array.isArray(val) ? Object.values(val) : val;
+          if (Array.isArray(dataArray)) {
+            dataArray = dataArray.filter(item => item !== null && item !== undefined);
           }
+          if (path === 'config') setter(val);
+          else setter(dataArray as any);
         } else if (initial) {
           set(ref(db, path), initial);
         } else {
-          if (path === 'config') {
-            setter({ uploadUrl: '', telegram: { botToken: '', adminChatId: '', stockmanChatId: '', enabled: false } } as any);
-          } else {
-            setter([] as any);
-          }
+          if (path === 'config') setter({ uploadUrl: '', telegram: { botToken: '', adminChatId: '', stockmanChatId: '', enabled: false } } as any);
+          else setter([] as any);
         }
-        
         loadedCount++;
         if (loadedCount >= syncRefs.length) setLoading(false);
       });
@@ -127,19 +139,39 @@ const App: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-right" dir="rtl">
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 dark:bg-slate-950 text-right transition-colors" dir="rtl">
         <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-6"></div>
-        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 font-['IRANSans']">در حال اتصال به انبار...</h2>
+        <h2 className="text-xl font-bold text-slate-800 dark:text-slate-200 font-['IRANSans'] px-4 text-center">در حال راه‌اندازی اپلیکیشن انبار...</h2>
       </div>
     );
   }
 
+  const cleanData = (obj: any): any => {
+    if (Array.isArray(obj)) return obj.map(cleanData);
+    if (obj !== null && typeof obj === 'object') {
+      const cleaned: any = {};
+      Object.keys(obj).forEach(key => {
+        const value = obj[key];
+        if (value !== undefined) {
+          cleaned[key] = cleanData(value);
+        }
+      });
+      return cleaned;
+    }
+    return obj;
+  };
+
+  const updateDb = (path: string, data: any) => {
+    const safeData = cleanData(data);
+    set(ref(db, path), safeData);
+  };
+
   const renderContent = () => {
     if (!currentUser) return null;
-    const updateDb = (path: string, data: any) => set(ref(db, path), data);
 
     switch (activeTab) {
       case 'dashboard': return <Dashboard invoices={invoices} products={products} currentUser={currentUser} />;
+      case 'analytics': return <AnalyticsPage invoices={invoices} currentUser={currentUser} isDarkMode={isDarkMode} />;
       case 'inventory': 
         return <InventoryPage 
           products={products} 
@@ -217,22 +249,40 @@ const App: React.FC = () => {
   if (!currentUser) return <LoginPage onLogin={handleLogin} />;
 
   return (
-    <div className="flex min-h-screen bg-gray-50 dark:bg-slate-950 text-right transition-colors duration-300" dir="rtl">
+    <div className="flex min-h-[100dvh] bg-gray-50 dark:bg-slate-950 text-right transition-colors duration-300" dir="rtl">
+      {isSidebarOpen && (
+        <div 
+          className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[90] lg:hidden animate-fadeIn" 
+          onClick={() => setIsSidebarOpen(false)}
+        ></div>
+      )}
+      
       <Sidebar 
         currentUser={currentUser} activeTab={activeTab} setActiveTab={setActiveTab} 
         onLogout={() => setCurrentUser(null)} isOpen={isSidebarOpen} 
         onClose={() => setIsSidebarOpen(false)} isDarkMode={isDarkMode} 
         toggleDarkMode={() => setIsDarkMode(!isDarkMode)} 
       />
-      <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
+      <main 
+        className="flex-1 p-4 lg:p-8 overflow-y-auto pb-24 lg:pb-8 relative"
+        onClick={() => { if(isSidebarOpen) setIsSidebarOpen(false); }}
+      >
         <header className="flex items-center justify-between mb-8 border-b dark:border-slate-800 pb-4">
-           <button onClick={() => setIsSidebarOpen(true)} className="lg:hidden p-2 text-gray-600 dark:text-gray-400">
+           <button 
+             onClick={(e) => { e.stopPropagation(); setIsSidebarOpen(true); }} 
+             className="lg:hidden p-2 text-gray-600 dark:text-gray-400"
+           >
              <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" /></svg>
            </button>
-           <h1 className="text-xl font-bold dark:text-white font-['IRANSans']">سامانه هوشمند انبارداری</h1>
+           <div className="flex flex-col">
+             <h1 className="text-sm font-bold dark:text-white font-['IRANSans']">سامانه انبارداری</h1>
+             {deferredPrompt && (
+               <button onClick={handleInstall} className="text-[10px] text-blue-600 dark:text-blue-400 font-bold underline">نصب نسخه موبایل</button>
+             )}
+           </div>
            <div className="flex items-center gap-2 bg-emerald-50 dark:bg-emerald-900/20 px-3 py-1 rounded-full border border-emerald-100 dark:border-emerald-800">
-             <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-             <span className="text-[10px] text-emerald-700 dark:text-emerald-400 font-bold">اتصال زنده فایربیس</span>
+             <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse"></div>
+             <span className="text-[9px] text-emerald-700 dark:text-emerald-400 font-bold">آنلاین</span>
            </div>
         </header>
         {renderContent()}

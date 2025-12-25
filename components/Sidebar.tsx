@@ -16,6 +16,7 @@ interface SidebarProps {
 const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, setActiveTab, onLogout, isOpen, onClose, isDarkMode, toggleDarkMode }) => {
   const menuItems = [
     { id: 'dashboard', label: 'پیشخوان', icon: '📊', roles: [UserRole.ADMIN, UserRole.SALES, UserRole.STOCKMAN] },
+    { id: 'analytics', label: 'آمار و تحلیل', icon: '📈', roles: [UserRole.ADMIN, UserRole.SALES] }, // STOCKMAN removed
     { id: 'invoices', label: 'صدور حواله', icon: '📝', roles: [UserRole.ADMIN, UserRole.SALES, UserRole.STOCKMAN] },
     { id: 'inventory', label: 'انبار و موجودی', icon: '📦', roles: [UserRole.ADMIN, UserRole.SALES, UserRole.STOCKMAN] },
     { id: 'categories', label: 'دسته‌بندی‌ها', icon: '📂', roles: [UserRole.ADMIN, UserRole.SALES] },
@@ -24,9 +25,14 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, setActiveTab,
     { id: 'settings', label: 'تنظیمات کاربران', icon: '⚙️', roles: [UserRole.ADMIN] },
   ];
 
+  const handleTabClick = (id: string) => {
+    setActiveTab(id);
+    if (onClose) onClose(); 
+  };
+
   return (
     <aside className={`
-      fixed inset-y-0 right-0 z-40 w-64 bg-white dark:bg-slate-900 border-l dark:border-slate-800 shadow-sm flex flex-col transition-all duration-300 lg:translate-x-0 lg:static lg:inset-0
+      fixed inset-y-0 right-0 z-[100] w-64 bg-white dark:bg-slate-900 border-l dark:border-slate-800 shadow-sm flex flex-col transition-all duration-300 lg:translate-x-0 lg:static lg:inset-0
       ${isOpen ? 'translate-x-0' : 'translate-x-full'}
     `}>
       <div className="p-6 border-b dark:border-slate-800 text-center relative">
@@ -41,8 +47,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, setActiveTab,
         <div className="w-16 h-16 bg-blue-600 rounded-full mx-auto flex items-center justify-center text-white text-2xl font-bold mb-4 shadow-lg">
           {currentUser.name.charAt(0)}
         </div>
-        <h2 className="font-bold text-gray-800 dark:text-gray-100">{currentUser.name}</h2>
-        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+        <h2 className="font-bold text-gray-800 dark:text-gray-100 font-['IRANSans']">{currentUser.name}</h2>
+        <span className="text-xs text-gray-500 dark:text-gray-400 uppercase tracking-wider font-['IRANSans']">
           {currentUser.role === UserRole.ADMIN ? 'مدیر' : currentUser.role === UserRole.SALES ? 'فروشنده' : 'انباردار'}
         </span>
       </div>
@@ -53,8 +59,8 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, setActiveTab,
           .map(item => (
             <button
               key={item.id}
-              onClick={() => setActiveTab(item.id)}
-              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition ${
+              onClick={() => handleTabClick(item.id)}
+              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition font-['IRANSans'] ${
                 activeTab === item.id 
                   ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-300 font-bold' 
                   : 'text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-slate-800'
@@ -66,7 +72,7 @@ const Sidebar: React.FC<SidebarProps> = ({ currentUser, activeTab, setActiveTab,
           ))}
       </nav>
 
-      <div className="p-4 border-t dark:border-slate-800 space-y-2">
+      <div className="p-4 border-t dark:border-slate-800 space-y-2 font-['IRANSans']">
         <button
           onClick={toggleDarkMode}
           className="w-full flex items-center justify-between gap-3 px-4 py-3 text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 rounded-xl transition font-bold"
